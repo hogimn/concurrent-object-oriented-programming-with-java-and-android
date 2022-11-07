@@ -1,5 +1,6 @@
 package edu.vandy.simulator.managers.beings.runnableThreads;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import edu.vandy.simulator.managers.beings.BeingManager;
@@ -34,7 +35,7 @@ public class RunnableThreadsMgr
     public SimpleBeingRunnable newBeing() {
         // Return a new SimpleBeingRunnable instance.
         // TODO -- you fill in here replacing this statement with your solution.
-        return null;
+        return new SimpleBeingRunnable(this);
     }
 
     /**
@@ -45,17 +46,21 @@ public class RunnableThreadsMgr
     public void runSimulation() {
         // Call a method to create and start a thread for each being.
         // TODO -- you fill in here.
-        
+        beginBeingThreads();
 
         // Call a method that creates and starts a thread that's then
         //  used to wait for all the being threads to finish and
         //  return that thread to the caller.
         // TODO -- you fill in here.
-        
+        Thread waiterThread = createAndStartWaiterForBeingThreads();
 
         // Block until the waiter thread has finished.
         // TODO -- you fill in here.
-        
+        try {
+            waiterThread.join();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -76,11 +81,16 @@ public class RunnableThreadsMgr
         // (though they are free to do so if they choose).
         //
         // TODO -- you fill in here.
-        
+        mBeingThreads = new ArrayList<>();
+        for (Runnable being : getBeings()) {
+            Thread beingThread = new Thread(being);
+            beingThread.setUncaughtExceptionHandler((t, e) -> error(e));
+            mBeingThreads.add(beingThread);
+        }
 
         // Start all the threads in the List of Threads.
         // TODO -- you fill in here.
-        
+        mBeingThreads.forEach(Thread::start);
     }
 
     /**
@@ -97,15 +107,23 @@ public class RunnableThreadsMgr
         // the catch clause, which trigger the simulator to generate a
         // shutdownNow() request.
         // TODO -- you fill in here.
-        
+        Thread waiterThread = new Thread(() -> {
+            try {
+                for (Thread beingThread : mBeingThreads) {
+                    beingThread.join();
+                }
+            } catch (Exception e) {
+                error(e);
+            }
+        });
 
         // Start running the thread.
         // TODO -- you fill in here.
-        
+        waiterThread.start();
 
         // Return the thread.
         // TODO -- you fill in here replacing this statement with your solution.
-        return null;
+        return waiterThread;
     }
 
     /**
