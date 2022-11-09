@@ -32,14 +32,14 @@ public class SpinLockHashMapMgr extends PalantiriManager {
      * serialize on a critical section.
      */
     // TODO -- you fill in here.
-    
+    private CancellableLock mLock;
 
     /**
      * A counting Semaphore that limits concurrent access to the fixed
      * number of available palantiri managed by the PalantiriManager.
      */
     // TODO -- you fill in here.
-    
+    private Semaphore mSemaphore;
 
     /**
      * Called to allow subclass implementations the opportunity
@@ -53,7 +53,7 @@ public class SpinLockHashMapMgr extends PalantiriManager {
         // Initialize the Semaphore to use a "fair" implementation
         // that mediates concurrent access to the given Palantiri.
         // TODO -- you fill in here.
-        
+        mSemaphore = new Semaphore(getPalantiriCount());
 
         if (Assignment.isUndergraduate()) {
             // UNDERGRADUATES:
@@ -65,14 +65,16 @@ public class SpinLockHashMapMgr extends PalantiriManager {
             // value with your SpinLock implementation.
 
             // TODO -- you fill in here.
-            
+            mLock = new SpinLock();
 
             // Iterate through the List of Palantiri returned via the
             // getPalantiri() factory method and initialize each key
             // in the mPalantiriMap with "true" to indicate it's
             // available.
             // TODO -- you fill in here.
-            
+            getPalantiri().forEach(palantir ->
+                    mPalantiriMap.put(palantir, true));
+
         } else if (Assignment.isGraduate()) {
             // GRADUATES:
             //
@@ -83,15 +85,16 @@ public class SpinLockHashMapMgr extends PalantiriManager {
             // null value with your ReentrantSpinLock implementation.
 
             // TODO -- you fill in here.
-            
+            mLock = new ReentrantSpinLock();
 
             // Use the List.forEach() method to iterate through the
             // List of Palantiri returned via the getPalantiri()
             // factory method and initialize each key in the
             // mPalantiriMap with "true" to indicate it's available.
             // TODO -- you fill in here.
+            getPalantiri().forEach(palantir ->
+                    mPalantiriMap.put(palantir, true));
 
-            
         } else {
             throw new IllegalStateException("Invalid assignment type");
         }
@@ -121,7 +124,18 @@ public class SpinLockHashMapMgr extends PalantiriManager {
         // exceptions.
 
         // TODO -- you fill in here.
-        
+        mSemaphore.acquire();
+        mLock.lock(this::isCancelled);
+        try {
+            for (var e : mPalantiriMap.entrySet()) {
+                if (e.getValue()) {
+                    e.setValue(false);
+                    return e.getKey();
+                }
+            }
+        } finally {
+            mLock.unlock();
+        }
 
         // This invariant should always hold for all acquire()
         // implementations if implemented correctly. That is the
@@ -155,7 +169,22 @@ public class SpinLockHashMapMgr extends PalantiriManager {
         // 3. Only release the semaphore if the palantir parameter
         //    is correct.
         // TODO -- you fill in here.
-        
+        if (palantir == null) {
+            throw new IllegalArgumentException("palantir is null.");
+        }
+
+        mLock.lock(this::isCancelled);
+        try {
+            Boolean prevValue = mPalantiriMap.replace(palantir, true);
+            if (prevValue == null || prevValue) {
+                throw new IllegalArgumentException(
+                        "palantir has not been acquired.");
+            }
+        } finally {
+            mLock.unlock();
+        }
+
+        mSemaphore.release();
     }
 
     /**

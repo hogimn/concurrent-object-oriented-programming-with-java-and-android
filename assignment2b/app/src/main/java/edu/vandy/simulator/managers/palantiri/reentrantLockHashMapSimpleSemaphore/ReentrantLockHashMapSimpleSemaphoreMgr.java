@@ -36,7 +36,7 @@ public class ReentrantLockHashMapSimpleSemaphoreMgr extends PalantiriManager {
      * keep track of whether the key is available.
      */
     // TODO -- you fill in here.
-    
+    private Map<Palantir, Boolean> mPalantiriMap;
 
     /**
      * A counting SimpleSemaphore that limits concurrent access to the
@@ -44,13 +44,13 @@ public class ReentrantLockHashMapSimpleSemaphoreMgr extends PalantiriManager {
      * PalantiriManager.
      */
     // TODO -- you fill in here.
-    
+    private SimpleSemaphore mSemaphore;
 
     /**
      * A Lock used to protect critical sections involving the HashMap.
      */
     // TODO -- you fill in here.
-    
+    private Lock mLock;
 
     /**
      * Resets the fields to their initial values
@@ -93,10 +93,18 @@ public class ReentrantLockHashMapSimpleSemaphoreMgr extends PalantiriManager {
 
         if (Assignment.isUndergraduate()) {
             // TODO -- you fill in here.
-            
+            mPalantiriMap = new HashMap<>();
+            mLock = new ReentrantLock(true);
+            getPalantiri().forEach(palantir ->
+                    mPalantiriMap.put(palantir, true));
+
         } else if (Assignment.isGraduate()) {
             // TODO -- you fill in here.
-            
+            mLock = new ReentrantLock(true);
+            mPalantiriMap = getPalantiri()
+                    .stream()
+                    .collect(toMap(Function.identity(), __ -> true));
+            assert(mPalantiriMap.size() == getPalantiriCount());
         } else {
             throw new IllegalStateException("Invalid assignment type");
         }
@@ -105,11 +113,11 @@ public class ReentrantLockHashMapSimpleSemaphoreMgr extends PalantiriManager {
         // implementation) and is used to mediate concurrent access to
         // the given Palantiri map.
         // TODO -- you fill in here.
-        
+        mSemaphore = new SimpleSemaphore(getPalantiriCount());
 
         // Initialize a new ReentrantLock (which has a "non-fair" implementation).
         // TODO -- you fill in here.
-        
+        mLock = new ReentrantLock();
     }
 
     /**
@@ -145,22 +153,35 @@ public class ReentrantLockHashMapSimpleSemaphoreMgr extends PalantiriManager {
         // the following actions in an interruptible manner to ensure
         // thread-safety.
         // TODO -- you fill in here.
-        
-
+        mSemaphore.acquire();
+        mLock.lockInterruptibly();
         try {
             if (Assignment.isUndergraduate()) {
                 // TODO -- you fill in here.
-                
+                for (var e : mPalantiriMap.entrySet()) {
+                    if (e.getValue()) {
+                        e.setValue(false);
+                        return e.getKey();
+                    }
+                }
             } else if (Assignment.isGraduate()) {
                 // TODO -- you fill in here.
-                
+                Palantir palantir = mPalantiriMap.entrySet()
+                        .stream()
+                        .filter(e -> e.setValue(false))
+                        .map(Map.Entry::getKey)
+                        .findFirst()
+                        .orElse(null);
+
+                if (palantir != null)
+                    return palantir;
             } else {
                 throw new IllegalStateException("Invalid assignment type");
             }
         } finally {
             // Always release the lock.
             // TODO -- you fill in here.
-            
+            mLock.unlock();
         }
 
         // This invariant should always hold for all acquire()
@@ -197,7 +218,22 @@ public class ReentrantLockHashMapSimpleSemaphoreMgr extends PalantiriManager {
         // 3. Only release the semaphore if the palantir parameter
         //    is correct.
         // TODO -- you fill in here.
-        
+        if (palantir == null) {
+            throw new IllegalArgumentException("palantir is null.");
+        }
+
+        mLock.lockInterruptibly();
+        try {
+            Boolean prev = mPalantiriMap.replace(palantir, true);
+            if (prev == null || prev) {
+                throw new IllegalArgumentException(
+                        "palantir has not been aacquired.");
+            }
+        } finally {
+            mLock.unlock();
+        }
+
+        mSemaphore.release();
     }
 
     /**
