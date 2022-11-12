@@ -33,7 +33,7 @@ public class BeingCallable
         runGazingSimulation(getGazingIterations());
 
         // TODO -- you fill in here replacing this statement with your solution.
-        return null;
+        return this;
     }
 
     /**
@@ -52,6 +52,15 @@ public class BeingCallable
         // a call to the appropriate base class helper method.
 
         // TODO -- you fill in here.
-        
+        Palantir palantir = acquirePalantir();
+        if (palantir == null) {
+            error("acquirePalantir failed.");
+        } else {
+            try {
+                palantir.gaze(this);
+            } finally {
+                releasePalantir(palantir);
+            }
+        }
     }
 }
