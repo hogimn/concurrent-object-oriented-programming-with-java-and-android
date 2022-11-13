@@ -23,21 +23,22 @@ public class FairSemaphoreMO
      */
     // TODO -- you fill in here.  Make sure that this field will ensure
     // its values aren't cached by multiple threads..
-    
+    private volatile int mAvailablePermits;
 
     /**
      * Define a LinkedList "WaitQueue" that keeps track of the waiters in a FIFO
      * List to ensure "fair" semantics.
      */
     // TODO -- you fill in here.
-    
+    private LinkedList<Waiter> mWaitQueue;
 
     /**
      * Initialize the fields in the class.
      */
     public FairSemaphoreMO(int availablePermits) {
         // TODO -- you fill in here.
-        
+        mAvailablePermits = availablePermits;
+        mWaitQueue = new LinkedList<>();
     }
 
     /**
@@ -57,7 +58,21 @@ public class FairSemaphoreMO
     public void acquireUninterruptibly() {
         // TODO -- you fill in here, using a loop to ignore
         // InterruptedExceptions.
-        
+        boolean isInterrupted;
+        boolean isInterruptedAtLeastOnce = false;
+        do {
+            isInterrupted = false;
+            try {
+                acquire();
+            } catch (InterruptedException e) {
+                isInterrupted = true;
+                isInterruptedAtLeastOnce = true;
+            }
+        } while (isInterrupted);
+
+        if (isInterruptedAtLeastOnce) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -87,7 +102,9 @@ public class FairSemaphoreMO
         //
         // TODO -- you fill in here replacing this statement with your
         //  solution which should be synchronized.
-        return false;
+        synchronized (this) {
+            return tryToGetPermitUnlocked();
+        }
     }
 
     /**
@@ -103,7 +120,12 @@ public class FairSemaphoreMO
         //
         // TODO -- you fill in here replacing this statement with your
         // solution which should not be synchronized.
-        return false;
+        if (mWaitQueue.isEmpty() && mAvailablePermits > 0) {
+            mAvailablePermits--;
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -126,7 +148,27 @@ public class FairSemaphoreMO
 
         // TODO -- implement "fair" semaphore acquire semantics using
         // the Specific Notification pattern.
-        
+        synchronized (this) {
+            if (tryToGetPermitUnlocked())
+                return;
+        }
+        synchronized (waiter) {
+            synchronized (this) {
+                mWaitQueue.add(waiter);
+            }
+            try {
+                while (!waiter.mReleased)
+                    waiter.wait();
+            } catch (InterruptedException e) {
+                boolean released;
+                synchronized (this) {
+                    released = mWaitQueue.remove(waiter);
+                }
+                if (!released)
+                    release();
+                throw e;
+            }
+        }
     }
 
     /**
@@ -136,7 +178,18 @@ public class FairSemaphoreMO
     public void release() {
         // TODO -- implement "fair" semaphore release semantics
         // using the Specific Notification pattern.
-        
+        Waiter waiter;
+        synchronized (this) {
+            waiter = mWaitQueue.pollFirst();
+        }
+        if (waiter == null)
+            mAvailablePermits++;
+        else {
+            synchronized (waiter) {
+                waiter.mReleased = true;
+                waiter.notify();
+            }
+        }
     }
 
     /**
@@ -145,7 +198,7 @@ public class FairSemaphoreMO
     @Override
     public int availablePermits() {
         // TODO -- you fill in here replacing this statement with your solution.
-        return 0;
+        return mAvailablePermits;
     }
 
     /**

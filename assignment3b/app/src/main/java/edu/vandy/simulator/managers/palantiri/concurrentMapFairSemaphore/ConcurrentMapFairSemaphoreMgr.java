@@ -6,6 +6,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -74,7 +75,7 @@ public class ConcurrentMapFairSemaphoreMgr
 
         // Use Java Streams to initialize a new ConcurrentHashMap.
         // TODO -- you fill in here.
-        
+        mPalantiriMap = new ConcurrentHashMap<>();
 
         // Initialize the Semaphore to use a "fair" implementation
         // that mediates concurrent access to the given Palantiri.
@@ -82,10 +83,14 @@ public class ConcurrentMapFairSemaphoreMgr
         // students must use a FairSemaphoreMO.
         if (Assignment.isUndergraduate()) {
             // TODO -- you fill in here.
-            
+            mAvailablePalantiri = new FairSemaphoreMO(getPalantiriCount());
+            getPalantiri().forEach(palantir ->
+                    mPalantiriMap.put(palantir, true));
         } else if (Assignment.isGraduate()) {
             // TODO -- you fill in here.
-            
+            mAvailablePalantiri = new FairSemaphoreCO(getPalantiriCount());
+            getPalantiri().forEach(palantir ->
+                    mPalantiriMap.put(palantir, true));
         }
     }
 
@@ -115,7 +120,14 @@ public class ConcurrentMapFairSemaphoreMgr
         // termination from an Interrupted exception.
 
         // TODO -- you fill in here replacing this statement with your solution.
-        return null;
+        mAvailablePalantiri.acquire();
+        for (;;) {
+            for (Palantir palantir : mPalantiriMap.keySet()) {
+                if (mPalantiriMap.replace(palantir, true, false)) {
+                    return palantir;
+                }
+            }
+        }
     }
 
     /**
@@ -133,7 +145,17 @@ public class ConcurrentMapFairSemaphoreMgr
         // method. Also, make sure to check if the palantir is null
         // before proceeding..
         // TODO -- you fill in here.
-        
+        if (palantir == null) {
+            throw new IllegalArgumentException("palantir is null.");
+        }
+
+        Boolean prevValue = mPalantiriMap.replace(palantir, true);
+        if (prevValue == null || prevValue) {
+            throw new IllegalArgumentException(
+                    "palantir has not been acquired.");
+        }
+
+        mAvailablePalantiri.release();
     }
 
     /**
