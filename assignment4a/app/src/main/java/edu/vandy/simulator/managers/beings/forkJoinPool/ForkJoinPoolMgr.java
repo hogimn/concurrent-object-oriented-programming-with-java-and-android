@@ -25,14 +25,14 @@ public class ForkJoinPoolMgr
      * thread pool start running at the same time.
      */
     // TODO -- you fill in here.
-    
+    private CyclicBarrier mEntryBarrier;
 
     /**
      * A CountDownLatch exit barrier that ensures the waiter thread
      * doesn't finish until all the Beings finish gazing.
      */
     // TODO -- you fill in here.
-    
+    private CountDownLatch mExitBarrier;
 
     /**
      * Default constructor.
@@ -60,7 +60,7 @@ public class ForkJoinPoolMgr
         // Return a new BeingBlocker instance.
         // TODO -- you fill in here replacing this statement with
         // your solution.
-        throw new UnsupportedOperationException("Replace this");
+        return new BeingBlocker(this);
     }
 
     /**
@@ -72,13 +72,13 @@ public class ForkJoinPoolMgr
         // Call a method that initializes the barrier
         // synchronizers and assigns them to the Beings.
         // TODO -- you fill in here.
-        
+        initializeBarriers();
 
         // Call a method that uses the common fork-join pool to run a
         // pool of threads that represent the Beings in this
         // simulation.
         // TODO -- you fill in here.
-        
+        processAllBeings();
     }
 
     /**
@@ -89,17 +89,18 @@ public class ForkJoinPoolMgr
         // Initialize an entry barrier that ensures all threads in the
         // thread pool start running at the same time.
         // TODO -- you fill in here.
-        
+        mEntryBarrier = new CyclicBarrier(getBeingCount() + 1);
 
         // Initialize an exit barrier to ensure the waiter thread
         // doesn't finish until all the Beings finish gazing.
         // TODO -- you fill in here.
-        
+        mExitBarrier = new CountDownLatch(getBeingCount());
 
         // Iterate through all the Beings and set their barriers
         // accordingly.
         // TODO -- you fill in here.
-        
+        getBeings().forEach(being ->
+                being.setBarriers(mEntryBarrier, mExitBarrier));
     }
 
     /**
@@ -113,16 +114,18 @@ public class ForkJoinPoolMgr
         // managedBlock() method.
 
         // TODO -- you fill in here.
-        
+        getBeings().forEach(being ->
+                ForkJoinPool.commonPool().execute(() ->
+                        rethrowRunnable(() -> ForkJoinPool.managedBlock(being))));
 
         // Don't continue with any processing until all Beings are ready
         // to run.
         // TODO -- You fill in here.
-        
+        mEntryBarrier.await();
 
         // Don't continue until all Beings have finished their gazing.
         // TODO -- You fill in here.
-        
+        mExitBarrier.await();
     }
 
     /**

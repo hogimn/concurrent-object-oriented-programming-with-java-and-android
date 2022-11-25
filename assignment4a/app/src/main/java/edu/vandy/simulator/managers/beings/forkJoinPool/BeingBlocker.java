@@ -27,13 +27,13 @@ public class BeingBlocker
      * thread pool start running at the same time.
      */
     // TODO -- you fill in here.
-    
+    private CyclicBarrier mEntryBarrier;
 
     /**
      * A CountDownLatch exit barrier that ensures the waiter thread
      * doesn't finish until all the Beings finish gazing.
      */
-    
+    private CountDownLatch mExitBarrier;
 
     /**
      * Constructor initializes the field.
@@ -58,7 +58,8 @@ public class BeingBlocker
                      CountDownLatch exitBarrier) {
         // Initialize the barrier fields.
         // TODO -- you fill in here.
-        
+        mEntryBarrier = entryBarrier;
+        mExitBarrier = exitBarrier;
     }
 
     /**
@@ -69,18 +70,18 @@ public class BeingBlocker
         try {
             // Don't start gazing until all Beings are ready to run.
             // TODO -- You fill in here.
-            
+            mEntryBarrier.await();
 
             // Gaze at a palantir the designated number of times.
             runGazingSimulation(getGazingIterations());
 
             // Inform waiter thread that this Being is done gazing.
             // TODO -- You fill in here.
-            
+            mExitBarrier.countDown();
 
             // TODO -- you fill in here replacing this statement with your
             // solution.
-            throw new UnsupportedOperationException("Replace this");
+            return true;
         } catch (Throwable t) {
             throw new RuntimeException(t);
         }
@@ -110,6 +111,15 @@ public class BeingBlocker
         // a call to the appropriate base class helper method.
 
         // TODO -- you fill in here.
-        
+        Palantir palantir = acquirePalantir();
+        if (palantir == null) {
+            error("acquirePalantir failed.");
+        } else {
+            try {
+                palantir.gaze(this);
+            } finally {
+                releasePalantir(palantir);
+            }
+        }
     }
 }

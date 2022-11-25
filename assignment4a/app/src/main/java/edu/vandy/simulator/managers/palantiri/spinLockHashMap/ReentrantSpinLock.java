@@ -17,21 +17,21 @@ public class ReentrantSpinLock
      * should be "unlocked".
      */
     // TODO -- you fill in here.
-    
+    private final AtomicReference<Thread> mOwner = new AtomicReference<>();
 
     /**
      * Count the number of times the owner thread has recursively
      * acquired the lock.
      */
     // TODO -- you fill in here.
-    
+    private int recursiveCount;
 
     /**
      * @return The current recursion count.
      */
     public int getRecursionCount() {
         // TODO -- you fill in here replacing this statement with your solution.
-        return -1;
+        return recursiveCount;
     }
 
     /**
@@ -45,7 +45,7 @@ public class ReentrantSpinLock
         // Try to set mOwner's value to the thread (true), which
         // succeeds iff its current value is null (false).
         // TODO -- you fill in here replacing this statement with your solution.
-        return false;
+        return mOwner.compareAndSet(null, Thread.currentThread());
     }
 
     /**
@@ -68,7 +68,18 @@ public class ReentrantSpinLock
         // check if a shutdown has been requested and if so throw a
         // cancellation exception.  
         // TODO -- you fill in here.
-        
+        if (mOwner.get() == Thread.currentThread()) {
+            recursiveCount++;
+            return;
+        }
+
+        while (!(mOwner.get() == null && tryLock())) {
+            if (isCancelled.get()) {
+                throw new CancellationException(
+                        "isCancelled returns true.");
+            }
+            Thread.yield();
+        }
     }
 
     /**
@@ -84,6 +95,15 @@ public class ReentrantSpinLock
         // then throw IllegalMonitorStateException.
 
         // TODO -- you fill in here.
-        
+        if (mOwner.get() == Thread.currentThread()) {
+            if (recursiveCount > 0) {
+                recursiveCount--;
+                return;
+            }
+            mOwner.set(null);
+        } else {
+            throw new IllegalMonitorStateException(
+                    "Current thread has not acquired lock.");
+        }
     }
 }
