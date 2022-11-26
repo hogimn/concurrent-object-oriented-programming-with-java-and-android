@@ -30,28 +30,30 @@ public class FairSemaphoreCO
      * "non-fair".
      */
     // TODO -- you fill in here
-    
+    private Lock mLock;
 
     /**
      * Define a LinkedList "WaitQueue" that keeps track of the waiters
      * in a FIFO List to ensure "fair" semantics.
      */
     // TODO -- you fill in here.
-    
+    private LinkedList<Waiter> mWaiterQueue;
 
     /**
      * Define a count of the number of available permits.
      */
     // TODO -- you fill in here.  Make sure that this field will ensure
     // its values aren't cached by multiple threads..
-    
+    private volatile int mAvailablePermits;
 
     /**
      * Initialize the fields in the class.
      */
     public FairSemaphoreCO(int availablePermits) {
         // TODO -- you fill in here.
-        
+        mAvailablePermits = availablePermits;
+        mLock = new ReentrantLock();
+        mWaiterQueue = new LinkedList<>();
     }
 
     /**
@@ -73,7 +75,20 @@ public class FairSemaphoreCO
     public void acquireUninterruptibly() {
         // TODO -- you fill in here, make sure to call your acquire()
         // implementation in a loop to avoid code duplication.
-        
+        boolean isInterrupted;
+        boolean isInterruptedAtLeastOnce = false;
+        do {
+            isInterrupted = false;
+            try {
+                acquire();
+            } catch (InterruptedException e) {
+                isInterrupted = true;
+                isInterruptedAtLeastOnce = true;
+            }
+        } while (isInterrupted);
+
+        if (isInterruptedAtLeastOnce)
+            Thread.currentThread().interrupt();
     }
 
     /**
@@ -109,7 +124,12 @@ public class FairSemaphoreCO
         // solution that performs synchronization and then just
         // forward to tryToGetPermitUnlocked(), which contains the
         // actual logic for checking if a permit can be obtained.
-        return false;
+        boolean result;
+        mLock.lock();
+        result = tryToGetPermitUnlocked();
+        if (result)
+            mLock.unlock();
+        return result;
     }
 
     /**
@@ -127,6 +147,10 @@ public class FairSemaphoreCO
         // solution, which should not be synchronized, but which
         // should contain the actual logic for checking if a permit
         // can be obtained.
+        if (mWaiterQueue.isEmpty() && mAvailablePermits > 0) {
+            mAvailablePermits--;
+            return true;
+        }
         return false;
     }
 
@@ -151,7 +175,30 @@ public class FairSemaphoreCO
 
         // TODO -- implement "fair" semaphore acquire semantics using
         // the Specific Notification pattern.
-        
+        waiter.mLock.lock();
+        try {
+            mWaiterQueue.add(waiter);
+        } finally {
+            mLock.unlock();
+        }
+
+        try {
+            while (!waiter.mReleased)
+                waiter.mCondition.await();
+        } catch (InterruptedException e) {
+            boolean released;
+            try {
+                mLock.lock();
+                released = mWaiterQueue.remove(waiter);
+                if (!released)
+                    release();
+            } finally {
+                mLock.unlock();
+            }
+            throw e;
+        } finally {
+            waiter.mLock.unlock();
+        }
     }
 
     /**
@@ -161,7 +208,25 @@ public class FairSemaphoreCO
     public void release() {
         // TODO -- implement "fair" semaphore release semantics using
         // the Specific Notification pattern.
-        
+        Waiter waiter;
+        mLock.lock();
+        try {
+            waiter = mWaiterQueue.pollFirst();
+        } finally {
+            mLock.unlock();
+        }
+
+        if (waiter == null)
+            mAvailablePermits++;
+        else {
+            waiter.mLock.lock();
+            try {
+                waiter.mReleased = true;
+                waiter.mCondition.signal();
+            } finally {
+                waiter.mLock.unlock();
+            }
+        }
     }
 
     /**
@@ -170,7 +235,7 @@ public class FairSemaphoreCO
     @Override
     public int availablePermits() {
         // TODO -- you fill in here replacing this statement with your solution.
-        return 0;
+        return mAvailablePermits;
     }
 
     /**
@@ -182,13 +247,13 @@ public class FairSemaphoreCO
          * A lock used to synchronize access to the condition below.
          */
         // TODO -- you fill in here.
-        
+        Lock mLock;
 
         /**
          * A condition that's used to wait in FIFO order.
          */
         // TODO -- you fill in here.
-        
+        Condition mCondition;
 
         /**
          * Keeps track of whether the Waiter was released or not to
@@ -202,7 +267,8 @@ public class FairSemaphoreCO
          */
         Waiter() {
             // TODO -- you fill in here to initialize the lock and condition fields.
-            
+            mLock = new ReentrantLock();
+            mCondition = mLock.newCondition();
         }
     }
 }

@@ -32,13 +32,13 @@ public class ExecutorServiceMgr
      * concurrently in the ExecutorService's thread pool.
      */
     // TODO -- you fill in here.
-    
+    List<Future<BeingCallable>> mFutures;
 
     /**
      * The ExecutorService contains a fixed pool of threads.
      */
     // TODO -- you fill in here.
-    
+    private ExecutorService mExecutorService;
 
     /**
      * Default constructor.
@@ -65,7 +65,7 @@ public class ExecutorServiceMgr
     public BeingCallable newBeing() {
         // Return a new BeingCallable instance.
         // TODO -- you fill in here replacing this statement with your solution.
-        return null;
+        return new BeingCallable(this);
     }
 
     /**
@@ -78,16 +78,16 @@ public class ExecutorServiceMgr
         // a pool of threads that represent the beings in this
         // simulation.
         // TODO -- you fill in here.
-        
+        beginBeingThreadPool();
 
         // Call a method that waits for all futures to complete.
         // TODO -- you fill in here.
-        
+        awaitCompletionOfFutures();
 
         // Call this class's shutdownNow() method to cleanly shutdown
         // the executor service.
         // TODO -- you fill in here.
-        
+        shutdownNow();
     }
 
     /**
@@ -99,7 +99,7 @@ public class ExecutorServiceMgr
     ExecutorService createExecutorService(int size) {
         // TODO -- you fill in here replacing this statement with your
         // solution.
-        return null;
+        return Executors.newFixedThreadPool(size);
     }
 
     /**
@@ -131,15 +131,20 @@ public class ExecutorServiceMgr
         // helper method to get the thread count to pass as the pool
         // size.
         // TODO -- you fill in here.
-        
+        mExecutorService = createExecutorService(getThreadCount());
 
         // TODO -- you fill in here.
         if (Assignment.isUndergraduate()) {
             // Results will be stored in this Future list.
-            
+            mFutures = new ArrayList<>();
+            getBeings().forEach(being ->
+                    mFutures.add(mExecutorService.submit(being)));
         } else if (Assignment.isGraduate()) {
             // Store the results in mFutureList.
-            
+            mFutures = getBeings()
+                    .stream()
+                    .map(mExecutorService::submit)
+                    .collect(toList());
         } else {
             throw new IllegalStateException("Invalid assignment type");
         }
@@ -176,9 +181,14 @@ public class ExecutorServiceMgr
         try {
             // TODO -- you fill in here.
             if (Assignment.isUndergraduate()) {
-                
+                for (Future<BeingCallable> future : mFutures) {
+                    rethrowSupplier(future::get).get();
+                }
+                succeeded = true;
             } else if (Assignment.isGraduate()) {
-                
+                mFutures.forEach(future ->
+                        rethrowSupplier(future::get).get());
+                succeeded = true;
             } else {
                 throw new IllegalStateException("Invalid assignment type");
             }
@@ -204,11 +214,13 @@ public class ExecutorServiceMgr
         // futures, but only if they aren't already done or already
         // canceled.
         // TODO -- you fill in here.
-        
+        mFutures.stream()
+                .filter(future -> !future.isCancelled() && !future.isDone())
+                .forEach(future -> future.cancel(true));
 
         // Shutdown the executor *now*.
         // TODO -- you fill in here.
-        
+        mExecutorService.shutdownNow();
 
         Controller.log(TAG + ": shutdownNow: exited with "
                 + getRunningBeingCount() + "/"

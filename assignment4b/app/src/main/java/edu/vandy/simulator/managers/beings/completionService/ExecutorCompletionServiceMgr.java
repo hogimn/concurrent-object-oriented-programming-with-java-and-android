@@ -34,14 +34,14 @@ public class ExecutorCompletionServiceMgr
      * The ExecutorService contains a cached pool of threads.
      */
     // TODO -- you fill in here.
-    
+    private ExecutorService mExecutorService;
 
     /**
      * The CompletionService that's associated with the
      * ExecutorService above.
      */
     // TODO -- you fill in here.
-    
+    private CompletionService<BeingCallable> mExecutorCompletionService;
 
     /**
      * Default constructor.
@@ -68,7 +68,7 @@ public class ExecutorCompletionServiceMgr
     public BeingCallable newBeing() {
         // Return a new BeingCallable instance.
         // TODO -- you fill in here replacing this statement with your solution.
-        return null;
+        return new BeingCallable(this);
     }
 
     /**
@@ -81,16 +81,16 @@ public class ExecutorCompletionServiceMgr
         // a pool of threads that represent the beings in this
         // simulation.
         // TODO -- you fill in here.
-        
+        beginBeingThreadPool();
 
         // Call a method that waits for all futures to complete.
         // TODO -- you fill in here.
-        
+        awaitCompletionOfFutures();
 
         // Call this class's shutdownNow() method to cleanly shutdown
         // the executor service.
         // TODO -- you fill in here.
-        
+        shutdownNow();
     }
 
     /**
@@ -105,7 +105,7 @@ public class ExecutorCompletionServiceMgr
         // thread pool.
 
         // TODO -- you fill in here replacing this statement with your solution.
-        return null;
+        return Executors.newCachedThreadPool();
     }
 
     /**
@@ -117,7 +117,7 @@ public class ExecutorCompletionServiceMgr
     public CompletionService<BeingCallable> createExecutorCompletionService(
             ExecutorService executorService) {
         // TODO -- you fill in here replacing this statement with your solution.
-        return null;
+        return new ExecutorCompletionService<>(executorService);
     }
 
     /**
@@ -131,7 +131,9 @@ public class ExecutorCompletionServiceMgr
         // BeingCallable to the ExecutorCompletionService.
 
         // TODO -- you fill in here.
-        
+        mExecutorService = createExecutorService();
+        mExecutorCompletionService = createExecutorCompletionService(mExecutorService);
+        getBeings().forEach(mExecutorCompletionService::submit);
     }
 
     /**
@@ -159,11 +161,24 @@ public class ExecutorCompletionServiceMgr
             if (Assignment.isUndergraduate()) {
                 // Loop through all the beings.
                 // TODO -- you fill in here.
-                
+                try {
+                    for (int i = 0; i < getBeingCount(); i++) {
+                        Future<BeingCallable> future = mExecutorCompletionService.take();
+                        if (future.get() != null)
+                            processed++;
+                    }
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
             } else if (Assignment.isGraduate()) {
                 // Use a Java stream to process all the beings.
                 // TODO -- you fill in here.
-                
+                processed = (int) IntStream.rangeClosed(1, getBeingCount())
+                        .mapToObj(__ -> rethrowSupplier(() ->
+                                mExecutorCompletionService.take()).get())
+                        .filter(future -> rethrowSupplier(() ->
+                                future.get() != null).get())
+                        .count();
             }
         } finally {
             // Ensure that everything worked as expected.
@@ -191,11 +206,15 @@ public class ExecutorCompletionServiceMgr
 
         // Shutdown the executor *now*.
         // TODO -- you fill in here.
-        
+        mExecutorService.shutdownNow();
 
         // Wait for all the threads to terminate.
         // TODO -- you fill in here.
-        
+        try {
+            mExecutorService.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
 
         Controller.log(TAG + ": shutdownNow: exited with "
                 + getRunningBeingCount() + "/"

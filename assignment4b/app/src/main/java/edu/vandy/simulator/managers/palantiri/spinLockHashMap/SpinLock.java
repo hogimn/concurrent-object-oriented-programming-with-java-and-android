@@ -15,14 +15,14 @@ class SpinLock implements CancellableLock {
      * "unlocked".
      */
     // TODO -- you fill in here.
-    
+    private final AtomicBoolean mOwner = new AtomicBoolean(false);
 
     /**
      * @return The AtomicBoolean used for compare-and-swap.
      */
     public AtomicBoolean getOwner() {
         // TODO -- you fill in here, replacing null with the proper code.
-        return null;
+        return mOwner;
     }
 
     /**
@@ -36,7 +36,7 @@ class SpinLock implements CancellableLock {
         // Try to set owner's value to true, which succeeds iff its
         // current value is false.
         // TODO -- replace the following line with your solution.
-        throw new RuntimeException("TODO: remove this line.");
+        return mOwner.compareAndSet(false, true);
     }
 
     /**
@@ -58,7 +58,13 @@ class SpinLock implements CancellableLock {
         // check if a shutdown has been requested and if so throw a
         // cancellation exception.
         // TODO -- you fill in here.
-        
+        while (!(!mOwner.get() && tryLock())) {
+            if (isCancelled.get()) {
+                throw new CancellationException(
+                        "isCancelled returns true.");
+            }
+            Thread.yield();
+        }
     }
 
     /**
@@ -72,6 +78,9 @@ class SpinLock implements CancellableLock {
         // IllegalMonitorStateException.
 
         // TODO -- you fill in here.
-        
+        if (!mOwner.getAndSet(false)) {
+            throw new IllegalMonitorStateException(
+                    "Lock has not been acquired.");
+        }
     }
 }

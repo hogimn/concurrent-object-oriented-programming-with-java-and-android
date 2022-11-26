@@ -4,6 +4,7 @@ import android.util.Log;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
@@ -51,7 +52,7 @@ public class StampedLockFairSemaphoreMgr
      * A StampedLock synchronizer that protects the Palantiri state.
      */
     // TODO -- you fill in here.
-    
+    private StampedLock mStampedLock;
 
     /**
      * Zero parameter constructor required for Factory creation.
@@ -76,7 +77,9 @@ public class StampedLockFairSemaphoreMgr
         // Stream to initialize mPalantiriMap, whereas ugrad students
         // can implement without using a Java Stream.
         // TODO -- you fill in here.
-        
+        mPalantiriMap = new HashMap<>();
+        getPalantiri().forEach(palantir ->
+                mPalantiriMap.put(palantir, true));
 
         // Initialize the Semaphore to use a "fair" implementation
         // that mediates concurrent access to the given Palantiri.
@@ -84,7 +87,7 @@ public class StampedLockFairSemaphoreMgr
         // students must use a FairSemaphoreMO.
         if (Assignment.isUndergraduate()) {
             // TODO -- you fill in here.
-            
+            mAvailablePalantiri = new FairSemaphoreMO(getPalantiriCount());
         } else if (Assignment.isGraduate()) {
             // TODO -- you fill in here.
             
@@ -92,7 +95,7 @@ public class StampedLockFairSemaphoreMgr
 
         // Initialize the StampedLock.
         // TODO -- you fill in here.
-        
+        mStampedLock = new StampedLock();
     }
 
     /**
@@ -131,7 +134,33 @@ public class StampedLockFairSemaphoreMgr
             // to atomically upgrade the readlock to a writelock.
 
             // TODO -- you fill in here.
-            
+            mAvailablePalantiri.acquire();
+
+            long stamp = mStampedLock.readLockInterruptibly();
+            try {
+                while (true) {
+                    var entry = mPalantiriMap.entrySet()
+                            .stream()
+                            .filter(Map.Entry::getValue)
+                            .findFirst()
+                            .orElse(null);
+
+                    if (entry != null) {
+                        long ws = mStampedLock.tryConvertToWriteLock(stamp);
+                        if (ws != 0) {
+                            stamp = ws;
+                            entry.setValue(false);
+                            return entry.getKey();
+                        }
+                        else {
+                            mStampedLock.unlockRead(stamp);
+                            stamp = mStampedLock.writeLockInterruptibly();
+                        }
+                    }
+                }
+            } finally {
+                mStampedLock.unlock(stamp);
+            }
 
         // Undergrad students must use a Java iterator.
         } else if (Assignment.isUndergraduate()) {
@@ -152,7 +181,29 @@ public class StampedLockFairSemaphoreMgr
             // atomically upgrade the readlock to a writelock.
 
             // TODO -- you fill in here.
-            
+            mAvailablePalantiri.acquire();
+
+            long stamp = mStampedLock.readLockInterruptibly();
+            try {
+                var iter = mPalantiriMap.entrySet().iterator();
+                while (iter.hasNext()) {
+                    var e = iter.next();
+                    if (e.getValue()) {
+                        long ws = mStampedLock.tryConvertToWriteLock(stamp);
+                        if (ws != 0) {
+                            stamp = ws;
+                            e.setValue(false);
+                            return e.getKey();
+                        } else {
+                            mStampedLock.unlockRead(stamp);
+                            stamp = mStampedLock.writeLockInterruptibly();
+                            iter = mPalantiriMap.entrySet().iterator();
+                        }
+                    }
+                }
+            } finally {
+                mStampedLock.unlock(stamp);
+            }
         }
 
         // This method either succeeds by returning a Palantir, or
@@ -182,7 +233,21 @@ public class StampedLockFairSemaphoreMgr
         // 3. Only release the semaphore if the palantir parameter
         //    is correct.
         // TODO -- you fill in here.
-        
+        if (palantir == null) {
+            throw new IllegalArgumentException("palantir is null.");
+        }
+
+        long stamp = mStampedLock.writeLockInterruptibly();
+        try {
+            Boolean prevValue = mPalantiriMap.replace(palantir, true);
+            if (prevValue == null || prevValue) {
+                throw new IllegalArgumentException("palantir is null.");
+            }
+        } finally {
+            mStampedLock.unlockWrite(stamp);
+        }
+
+        mAvailablePalantiri.release();
     }
 
     /**
